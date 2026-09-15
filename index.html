@@ -779,10 +779,12 @@
     try{ return Array.from(crypto.getRandomValues(new Uint8Array(16)),function(n){ return n.toString(16).padStart(2,'0'); }).join(''); }
     catch(e){ var s=''; for(var i=0;i<32;i++){ s+='0123456789abcdef'.charAt(Math.floor(Math.random()*16)); } return s; }
   }
-  var submissionId=newId(), lastPayload='';
+  var submissionId=newId(), lastPayload='', recheck=null;
 
   form.addEventListener('submit',function(e){
-    e.preventDefault(); err.textContent=''; stepErr.textContent='';
+    e.preventDefault();
+    if(recheck){ recheck(); return; }        // "לבדוק שוב" אחרי שליחה שלא אושרה
+    err.textContent=''; stepErr.textContent='';
     var choice=val('choice'), story=val('story'), spelling=val('spelling'), element=val('element');
     var palette=paletteField.value, type=typeField.value;
     var task=txt('task'), wish=txt('wish'), voter=txt('voter');
@@ -804,7 +806,7 @@
     data.set('submissionId',submissionId);
 
     var done=function(){
-      clearDraft();
+      recheck=null; clearDraft();
       try{ localStorage.setItem('nameVote', JSON.stringify({voter:voter, choice:choice, palette:palette, type:type, story:story, at:Date.now()})); }catch(e){}
       var previewTally=null;
       if(!LIVE){
@@ -818,23 +820,51 @@
       form.hidden=true; progress.hidden=true;
       document.getElementById('again').hidden=true; document.getElementById('resumed').hidden=true;
       document.getElementById('thanksName').textContent=voter;
-      var summary='בחרת '+nameLabel(choice)+', צבעים "'+lab(CONFIG.PALETTES,palette,'name')+'", אות "'+lab(CONFIG.TYPES,type,'name')+'", והסיפור "'+lab(CONFIG.STORIES,story,'title')+'", והסימן "'+lab(CONFIG.ELEMENTS,element,'name')+'". ';
+      var summary='בחרת '+nameLabel(choice)+', צבעים "'+lab(CONFIG.PALETTES,palette,'name')+'", אות "'+lab(CONFIG.TYPES,type,'name')+'", והסיפור "'+lab(CONFIG.STORIES,story,'title','אף כיוון')+'", והסימן "'+lab(CONFIG.ELEMENTS,element,'name','אף סימן')+'". ';
       document.getElementById('thanksLine').textContent = summary + (LIVE ? 'התשובה נשמרה בגיליון של ערן.' : 'זו תצוגה מקדימה בלבד. התשובה לא נשלחה.');
       thanks.classList.add('on');
       if(previewTally && CONFIG.SHOW_RESULTS_AFTER_VOTE){ renderResults(previewTally); } else { fetchResults(); }
       window.scrollTo({top:0, behavior: reduced()?'auto':'smooth'});
       thanks.querySelector('h2').focus({preventScroll:true});
     };
-    var fail=function(){ btn.disabled=false; btn.textContent='לשלוח לערן'; err.textContent='לא הצלחנו לאשר שהתשובה נשמרה. הבחירות שלך עדיין כאן. נסי שוב, או כתבי לערן בוואטסאפ.'; };
+    // לא אומרים לה "נכשל" על תשובה שאולי כן נשמרה. זה בדיוק מה שקרה ב-15.9:
+    // השורה נכתבה בגיליון, אישור הקבלה איחר, והדף הודיע לה שהשליחה נכשלה.
+    var unsure=function(){
+      btn.disabled=false; btn.textContent='לבדוק שוב';
+      err.textContent='שלחנו את התשובה, אבל לא קיבלנו אישור מהשרת. סביר להניח שהיא כן הגיעה — אל תשלחי שוב. אפשר ללחוץ ״לבדוק שוב״, או פשוט לכתוב לערן.';
+    };
     if(!LIVE){ done(); return; }
 
     // POST אטום, ואחריו אישור קבלה שנקרא באמת. בלי אישור, לא נאמר שנשמר.
-    var ctl=new AbortController(); var timer=setTimeout(function(){ ctl.abort(); },12000);
-    fetch(CONFIG.SCRIPT_URL,{method:'POST',mode:'no-cors',body:data,keepalive:true,signal:ctl.signal})
-      .then(function(){ return fetch(CONFIG.SCRIPT_URL+'?receipt='+encodeURIComponent(submissionId)+'&_='+Date.now(),{signal:ctl.signal,cache:'no-store'}); })
-      .then(function(r){ return r.json(); })
-      .then(function(j){ clearTimeout(timer); if(j && j.ok && j.received){ done(); } else { fail(); } })
-      .catch(function(){ clearTimeout(timer); fail(); });
+    // האישור נבדק שוב ושוב עד הדדליין: ברשת סלולרית POST אחד יכול לקחת יותר מ-12 שניות,
+    // וניסיון בודד היה נכשל בדיוק ברגע שבו השורה כבר נכתבה.
+    var RECHECK_MS=45000;
+    function watchReceipt(deadline, delay){
+      setTimeout(function(){
+        fetch(CONFIG.SCRIPT_URL+'?receipt='+encodeURIComponent(submissionId)+'&_='+Date.now(),{cache:'no-store'})
+          .then(function(r){ return r.json(); })
+          .then(function(j){
+            if(j && j.ok && j.received){ done(); return; }
+            if(Date.now() < deadline) watchReceipt(deadline, 3000); else unsure();
+          })
+          .catch(function(){
+            if(Date.now() < deadline) watchReceipt(deadline, 3000); else unsure();
+          });
+      }, delay);
+    }
+    function sendOnce(){
+      btn.disabled=true; btn.textContent='שולח…'; err.textContent='';
+      var deadline=Date.now()+RECHECK_MS;
+      fetch(CONFIG.SCRIPT_URL,{method:'POST',mode:'no-cors',body:data,keepalive:true})
+        .then(function(){ watchReceipt(deadline,1200); })
+        .catch(function(){ watchReceipt(deadline,1200); });
+    }
+    // "לבדוק שוב" רק מחפש את אותה שליחה. אותו submissionId, אז אין סיכון לשורה כפולה.
+    recheck=function(){
+      btn.disabled=true; btn.textContent='בודק…'; err.textContent='';
+      watchReceipt(Date.now()+RECHECK_MS, 0);
+    };
+    sendOnce();
   });
 })();
 </script>
