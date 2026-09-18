@@ -3,27 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>הסקר עבר לכתובת חדשה</title>
+<title>סקר</title>
 <link rel="canonical" href="https://survey-production-5d9d.up.railway.app/">
 <meta http-equiv="refresh" content="0; url=https://survey-production-5d9d.up.railway.app/">
 <style>
+  /* הדף הזה לא אמור להיראות. הוא רקע ריק שקופץ הלאה מיד.
+     הגלגל והקישור מופיעים רק אם ההפניה לא קרתה — ולכן הם מושהים. */
   :root{ color-scheme: light dark; }
   body{ margin:0; min-height:100svh; display:grid; place-items:center;
         font:16px/1.6 -apple-system,"Segoe UI",Rubik,Arial,sans-serif;
         background:#faf9f7; color:#1a1a1a; padding:24px; }
   @media (prefers-color-scheme: dark){ body{ background:#141414; color:#f0efed; } }
-  .box{ max-width:32rem; text-align:center; }
-  h1{ font-size:1.35rem; margin:0 0 .6rem; }
-  p{ margin:0 0 1.2rem; opacity:.8; }
+  .fallback{ text-align:center; opacity:0; animation:show 0s linear 2.5s forwards; }
+  @keyframes show{ to{ opacity:1 } }
   a{ display:inline-block; padding:.7rem 1.4rem; border-radius:.6rem;
      background:#1a1a1a; color:#faf9f7; text-decoration:none; font-weight:600; }
   @media (prefers-color-scheme: dark){ a{ background:#f0efed; color:#141414; } }
+  /* מי שכיבתה אנימציות עדיין צריכה את הקישור, אז הוא פשוט גלוי */
+  @media (prefers-reduced-motion: reduce){ .fallback{ opacity:1; animation:none } }
 </style>
 </head>
 <body>
-  <div class="box">
-    <h1>הסקר עבר לכתובת חדשה</h1>
-    <p>מעבירים אותך לשם עכשיו. אם זה לא קורה מעצמו, הקישור כאן.</p>
+  <div class="fallback">
     <a id="go" href="https://survey-production-5d9d.up.railway.app/">לסקר</a>
   </div>
 <script>
